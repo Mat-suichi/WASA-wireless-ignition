@@ -50,7 +50,7 @@ void loop() {
     digitalWrite(IGNITEplus, HIGH);
     digitalWrite(IGNITEminus, HIGH);
     for(int i=0; i<50; i++){
-      if(readVoltage<0.02 || readCurrent<0.02 || readVoltage/readCurrent<0.001){
+      if(readVoltage<5 || readCurrent<5 || readVoltage/readCurrent<1){
         break;
       }else{
         delay(100);
@@ -78,7 +78,7 @@ double readVoltage(void){
     }
     delay(10);
   }
-  Serial.println(sum/10);
+  Serial.println(sum/10 + "mV");
   return sum/10;
 }
 
@@ -97,6 +97,6 @@ double readCurrent(void){
     }
     delay(10);
   }
-  Serial.println(sum/10);
+  Serial.println(sum/10 + "mV");
   return sum/10;
 }
