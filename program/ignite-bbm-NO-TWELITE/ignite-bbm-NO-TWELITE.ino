@@ -17,6 +17,11 @@ void setup() {
   pinMode(ALART, OUTPUT);
   pinMode(SW, INPUT);
 
+  Wire.begin();
+  // Wire.begin(address); Slaveモードも同様
+  pinMode(SDA, INPUT);
+  pinMode(SCL, INPUT);
+
   //電流計通信の設定
   Serial.begin(115200);
   if (voltCurrMeter.begin() != 0) {
@@ -26,10 +31,9 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  int time=0;
-  
+  unsigned int time=0;
   //一秒間スイッチを押す
-  while(time<=1000){
+  while(time<=10){
     if(digitalRead(SW)==1){
       time++;
       delay(10);
@@ -50,7 +54,7 @@ void loop() {
     digitalWrite(IGNITEplus, HIGH);
     digitalWrite(IGNITEminus, HIGH);
     for(int i=0; i<50; i++){
-      if(readVoltage<5 || readCurrent<5 || readVoltage/readCurrent<1){
+      if(readVoltage()<5.0 || readCurrent()<5.0 || readVoltage()/readCurrent()<1.0){
         break;
       }else{
         delay(100);
@@ -59,7 +63,10 @@ void loop() {
     //５秒後点火終了。二度目は行わないようにする。
     digitalWrite(IGNITEplus, LOW);
     digitalWrite(IGNITEminus, LOW);
-    exit(0);
+    
+    while(1){
+      //一度点火を実行したらもう何もしないように、ひたすらループするプログラムを入れた
+    }
   }
 }
 
@@ -78,7 +85,7 @@ double readVoltage(void){
     }
     delay(10);
   }
-  Serial.println(sum/10 + "mV");
+  Serial.println(String(sum/10) + "mV");
   return sum/10;
 }
 
@@ -97,6 +104,6 @@ double readCurrent(void){
     }
     delay(10);
   }
-  Serial.println(sum/10 + "mV");
+  Serial.println(String(sum/10) + "mV");
   return sum/10;
 }
