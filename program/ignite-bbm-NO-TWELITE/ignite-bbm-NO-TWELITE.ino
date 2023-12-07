@@ -4,11 +4,16 @@
 #define IGNITEminus 27
 #define ALART 28
 #define SW 29
+#define TEST 2
 
 //↓include欄に書いたブログ参照のこと
 const uint16_t ina226calib = INA226_asukiaaa::calcCalibByResistorMilliOhm(2);
 // const uint16_t ina226calib = INA226_asukiaaa::calcCalibByResistorMicroOhm(2000);
 INA226_asukiaaa voltCurrMeter(INA226_ASUKIAAA_ADDR_A0_GND_A1_GND, ina226calib);
+
+long timeNow;		//現在時刻
+long timeStart;         //タイマー開始時刻
+int swState;		//スイッチのステータス
 
 void setup() {
   //デジタルピンの設定
@@ -19,60 +24,122 @@ void setup() {
 
   Wire.begin();
   // Wire.begin(address); Slaveモードも同様
-  pinMode(SDA, INPUT);
-  pinMode(SCL, INPUT);
+  /*pinMode(SDA, INPUT);
+  pinMode(SCL, INPUT);*/
 
   //電流計通信の設定
   Serial.begin(115200);
+  // Wire2.begin(25, 26);
+  // voltCurrMeter.setWire(&Wire2);
   if (voltCurrMeter.begin() != 0) {
-    Serial.println("Failed to begin INA226");
+    Serial.println("Failed to begin INA226. Check wiring and device connection.");
   }
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  unsigned int time=0;
+  //現在時刻の取得 
+  timeNow = millis();  
+
   //一秒間スイッチを押す
-  while(time<=10){
-    if(digitalRead(SW)==1){
-      time++;
-      delay(10);
-    }
-    else{break;}
-  }
-  if(time==1001){
-    //アラートを５秒間点滅→一秒駆動
-    for(int i=0; i<=5; i++){
-      digitalWrite(SW, HIGH);
-      delay(500);
-      digitalWrite(SW, LOW);
-      delay(500);
-    }
-    digitalWrite(ALART, HIGH);
-    delay(1000);
-    //アラート計6秒後点火。５秒間点火駆動
-    digitalWrite(IGNITEplus, HIGH);
-    digitalWrite(IGNITEminus, HIGH);
-    for(int i=0; i<50; i++){
-      if(readVoltage()<5.0 || readCurrent()<5.0 || readVoltage()/readCurrent()<1.0){
-        break;
-      }else{
-        delay(100);
+  if(analogRead(SW)>500 && swState==0){
+    swState=1;
+    timeStart = timeNow;
+  }else if(analogRead(SW)>500 && swState==1){
+    if(timeNow-timeStart>=1000){
+      if(Connect()=true){
+        Serial.println("WARNING : IGNITING THE ENGINE\nSTATUS : ALART IN PROCCESS\n\n");
+        swState=2;
+        doIgnite();
+      }else if(Connect()=false){
+        Serial.println("Igniter Not Connected. Check if the igniter is valid.");
       }
-    }
-    //５秒後点火終了。二度目は行わないようにする。
-    digitalWrite(IGNITEplus, LOW);
-    digitalWrite(IGNITEminus, LOW);
+    }else{}
+  }else if(swState==2){
+    while(1){}		//プログラムの不備があるといけないので点火一度したらひたすらループ
+  }
+}
+
+
+
+/*　　　　　　　　　　　　　　　　　　この下は関数                               */
+
+//LED、ブザーを用いてのAlart
+void Alart(void){
+  //アラートを５秒間点滅→一秒駆動
+  int AlartTimes=0;       //何秒経ったか。0秒から始まる
+
+  //現在時刻の取得 
+  timeStart = millis();
+
+  while(AlartTimes<=5){
+    timeNow = millis();
     
-    while(1){
-      //一度点火を実行したらもう何もしないように、ひたすらループするプログラムを入れた
+    //Alartピンの作動状況の条件分岐
+    if(timeNow-timeStart<=500 && AlartTimes<5){    // .5秒まではAlartピンがHIGH→LEDとブザー作動
+      Serial.println("WARNING : IGNITING THE ENGINE in %d seconds\nSTATUS : ALART IN PROCESS\n\n", 5 - AlartTimes);
+      digitalWrite(ALART, HIGH);
+    }else if(timeNow-timeStart>500 && AlartTimes<5){        // .5秒まではAlartピンがLOW→LEDとブザー消灯
+      digitalWrite(ALART, LOW);
+    }
+
+    //一秒経過後の時間関連の処理
+    if(timeNow-timeStart>=1000){
+      timeStart=timeNow;    //一秒ごとにtimeStartを更新
+      AlartTimes++;         //一秒ごとにAlartTimesを一つ増やす
+    }
+
+    //5秒経過したら1秒Alartを行う。1秒後、
+    if(timeStart<=1000 || AlartTimes==5){
+      digitalWrite(ALART, HIGH);
+    }else if(AlartTimes==5){
+      AlartTimes++;     //冗長化
+      break;            //Alartを終了
+    }
+
+    //スイッチから手が離れたら終了
+    if(analogRead(SW)<500){
+      Serial.println("ANNOUNCEMENT : ABORT IGNITION\nHAND WAS REMOVED FROM THE SWITCH\n\n");
+      while(true){}
     }
   }
 }
 
+//点火操作を行う
+void doIgnite(void){
+  //アラート計6秒後点火。５秒間点火駆動
+  Alart();
+
+  //点火を行う
+  digitalWrite(IGNITEplus, HIGH);
+  digitalWrite(IGNITEminus, HIGH);
+
+  //電流電圧を測定する。
+  int N_ig=0;
+
+  for(int i=0; i<50; i++){
+    if(readVoltage()<5.0 || readCurrent()<5.0 || readVoltage()/readCurrent()<1.0){
+      N_ig++;
+    }else if(N_ig==2){
+      break;
+    }else{
+      N_ig=0;
+      delay(100);
+    }
+  }
+
+  //５秒後点火終了。二度目は行わないようにする。
+  digitalWrite(IGNITEplus, LOW);
+  digitalWrite(IGNITEminus, LOW);
+  
+  while(true){
+    //一度点火を実行したらもう何もしないように、ひたすらループするプログラムを入れた
+   }
+}
+
+
 //電圧を読む。0.01×10=0.1秒の平均を読む。
 double readVoltage(void){
-  int16_t ma, mv, mw;
+  int16_t mv;
   int i;
   double sum=0;
   for(i=0; i<10; i++){
@@ -104,6 +171,6 @@ double readCurrent(void){
     }
     delay(10);
   }
-  Serial.println(String(sum/10) + "mV");
+  Serial.println(String(sum/10) + "mA");
   return sum/10;
 }
