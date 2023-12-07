@@ -46,11 +46,11 @@ void loop() {
     timeStart = timeNow;
   }else if(analogRead(SW)>500 && swState==1){
     if(timeNow-timeStart>=1000){
-      if(Connect()=true){
+      if(Connect(1)==1){
         Serial.println("WARNING : IGNITING THE ENGINE\nSTATUS : ALART IN PROCCESS\n\n");
         swState=2;
         doIgnite();
-      }else if(Connect()=false){
+      }else if(Connect(1)==0){
         Serial.println("Igniter Not Connected. Check if the igniter is valid.");
       }
     }else{}
@@ -117,7 +117,7 @@ void doIgnite(void){
   int N_ig=0;
 
   for(int i=0; i<50; i++){
-    if(readVoltage()<5.0 || readCurrent()<5.0 || readVoltage()/readCurrent()<1.0){
+    if(Connect(1)==0){
       N_ig++;
     }else if(N_ig==2){
       break;
@@ -137,6 +137,42 @@ void doIgnite(void){
 }
 
 
+//イグナイターがくっついていない→0、くっついている→1、エラー→３
+int Connect(int p){
+  int i;
+  int16_t ma, mv, mw;
+  double sumv=0, suma=0;
+  double AveV, AveA, r;
+
+  for(i=0; i<5; i++){
+    if (voltCurrMeter.readMV(&mv) == 0) {
+      sumv+=mv;
+    } else {
+      Serial.println("Cannot read voltage.");
+      return 3;
+    }
+    if (voltCurrMeter.readMA(&ma) == 0) {
+      suma+=ma;
+    } else {
+      Serial.println("Cannot read current.");
+      return 3;
+    }
+    delay(1);
+  }
+  AveV=sumv/5;
+  AveA=suma/5;
+  r=AveV/AveA;
+  if(p==1){
+    Serial.println(String(AveV) + "mV\t" + String(AveA) + "mA\t"+ String(r) + "Ω");
+  }
+  if(AveA<5 || AveV<5 || r<1 || r>10000){
+    return 0;
+  }else{
+    return 1;
+  }
+}
+
+/*この先不要
 //電圧を読む。0.01×10=0.1秒の平均を読む。
 double readVoltage(void){
   int16_t mv;
